@@ -1,0 +1,93 @@
+# 
+# IPWorks MQ 2024 Python Edition - Sample Project
+# 
+# This sample project demonstrates the usage of IPWorks MQ in a 
+# simple, straightforward way. It is not intended to be a complete 
+# application. Error handling and other checks are simplified for clarity.
+# 
+# www.nsoftware.com/ipworksmq
+# 
+# This code is subject to the terms and conditions specified in the 
+# corresponding product license agreement which outlines the authorized 
+# usage and restrictions.
+# 
+
+import sys
+import string
+from ipworksmq import *
+
+input = sys.hexversion < 0x03000000 and raw_input or input
+
+
+def ensureArg(args, prompt, index):
+    if len(args) <= index:
+        while len(args) <= index:
+            args.append(None)
+        args[index] = input(prompt)
+    elif args[index] is None:
+        args[index] = input(prompt)
+
+
+
+dataReceived = False
+
+def fireError(e):
+  print("ERROR: " %e.message)
+
+def fireSSLServerAuthentication(e):
+  if (not e.accept):
+    print("Server provided the following certificate: \n")
+    print("Subject: %s \n", e.cert_subject)
+    print("Issuer: %s \n", e.cert_issuer)
+    print("The following problems have been determined for this certificate:  %s \n", e.status)
+    response = input("Would you like to continue or cancel the connection?  [y/n] ")
+    if (response =="y"):
+      e.accept = True
+
+def fireConnectionStatus(e):
+  print(e.connection_event)
+
+def fireDataIn(e):
+  global dataReceived
+  dataReceived = True
+  print ("Received: " + bytes.decode(e.text))
+
+def fireConnectionConnected(e):
+  pass
+
+print("********************************************************************")
+print("* This is a demo to show how to connect to an Azure Relay Service  *")
+print("* in order to send and receive data.                               *")
+print("********************************************************************")
+
+try:
+  azurerelaysender1 = AzureRelaySender()
+  azurerelaysender1.on_data_in = fireDataIn
+  azurerelaysender1.on_ssl_server_authentication = fireSSLServerAuthentication
+  azurerelaysender1.on_connection_status = fireConnectionStatus
+  azurerelaysender1.on_connection_connected = fireConnectionConnected
+  
+  azurerelaysender1.set_access_key(input("Set Access Key: "))
+  azurerelaysender1.set_access_key_name(input("Set Access Key Name: "))
+  azurerelaysender1.set_namespace_address(input("Set Namespace Address: "))
+  azurerelaysender1.set_hybrid_connection("hc1")
+  print("\n")
+  
+  azurerelaysender1.connect()
+  print("Connected")
+  while True: 
+    command = int(input("Please input command: 1 [Send Data] or  2 [Exit]: "))
+    if command == 1:
+      send = input("Please enter data to send: ")
+      azurerelaysender1.send(send.encode())
+      dataReceived = False
+      print("Now waiting for response...")
+      while dataReceived == False:
+        azurerelaysender1.do_events()
+    else:
+      azurerelaysender1.disconnect()
+      break
+      
+except IPWorksMQError as e:
+  print("ERROR: %s" % e.message)
+
